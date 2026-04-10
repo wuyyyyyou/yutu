@@ -301,12 +301,23 @@ func (s executaServer) handleInvoke(ctx context.Context, req executaRequest) exe
 	data, success, err := s.runYutu(ctx, workDir, normalizedArgs, envAdditions)
 	if err != nil {
 		return executaResponse{
-			JSONRPC: "2.0",
-			ID:      req.ID,
+			JSONRPC:            "2.0",
+			ID:                 req.ID,
+			forceFileTransport: true,
+			fileTransportDir:   workDir,
 			Error: &executaRPCError{
 				Code:    -32603,
 				Message: fmt.Sprintf("Failed to execute yutu: %v", err),
 			},
+		}
+	}
+	if !success {
+		return executaResponse{
+			JSONRPC:            "2.0",
+			ID:                 req.ID,
+			forceFileTransport: true,
+			fileTransportDir:   workDir,
+			Error:              classifyExecutaCommandError(data),
 		}
 	}
 
@@ -647,6 +658,57 @@ func stripExecutableExt(name string) string {
 func executaStderrHasCommandError(stderr []byte) bool {
 	for _, line := range strings.Split(string(stderr), "\n") {
 		if strings.HasPrefix(strings.TrimSpace(line), "Error:") {
+			return true
+		}
+	}
+	return false
+}
+
+func classifyExecutaCommandError(data map[string]any) *executaRPCError {
+	stderr, _ := data["stderr"].(string)
+	message := firstExecutaErrorLine(stderr)
+	if message == "" {
+		message = "yutu command failed"
+	}
+
+	code := -32603
+	if executaLooksLikeInvalidParams(stderr) {
+		code = -32602
+	}
+
+	return &executaRPCError{
+		Code:    code,
+		Message: message,
+		Data:    data,
+	}
+}
+
+func firstExecutaErrorLine(stderr string) string {
+	for _, line := range strings.Split(stderr, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "Error:") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "Error:"))
+		}
+	}
+	return ""
+}
+
+func executaLooksLikeInvalidParams(stderr string) bool {
+	lower := strings.ToLower(stderr)
+	patterns := []string{
+		"error: unknown flag:",
+		"error: unknown command",
+		"error: accepts ",
+		"error: required flag",
+		"error: invalid argument",
+		"error: invalid value",
+		"error: argument ",
+		"error: flag needs",
+		"error: requires at least",
+		"error: requires at most",
+	}
+	for _, pattern := range patterns {
+		if strings.Contains(lower, pattern) {
 			return true
 		}
 	}

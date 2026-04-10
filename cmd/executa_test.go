@@ -195,3 +195,28 @@ func TestSendResponseForcesFileTransport(t *testing.T) {
 		t.Fatalf("response file = %s, want marshaled result", string(content))
 	}
 }
+
+func TestClassifyExecutaCommandErrorInvalidParams(t *testing.T) {
+	t.Parallel()
+
+	err := classifyExecutaCommandError(map[string]any{
+		"stderr": "Error: unknown flag: --version\nUsage:\n  yutu [flags]\n",
+	})
+	if err.Code != -32602 {
+		t.Fatalf("Code = %d, want -32602", err.Code)
+	}
+	if err.Message != "unknown flag: --version" {
+		t.Fatalf("Message = %q, want %q", err.Message, "unknown flag: --version")
+	}
+}
+
+func TestClassifyExecutaCommandErrorInternal(t *testing.T) {
+	t.Parallel()
+
+	err := classifyExecutaCommandError(map[string]any{
+		"stderr": "Error: failed to create YouTube service: dial tcp: lookup oauth2.googleapis.com: no such host\n",
+	})
+	if err.Code != -32603 {
+		t.Fatalf("Code = %d, want -32603", err.Code)
+	}
+}

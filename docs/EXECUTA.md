@@ -169,6 +169,13 @@ end
 
 function yrun
     set -l resp_file (yresp_file $argv)
+    set -l has_error (cat $resp_file | jq -r 'has("error")')
+
+    if test "$has_error" = "true"
+        cat $resp_file | jq .
+        return 1
+    end
+
     set -l output_type (cat $resp_file | jq -r 'if .result.data.output == null then "null" elif (.result.data.output | type) == "string" then "string" else "json" end')
 
     if test "$output_type" = "json"
