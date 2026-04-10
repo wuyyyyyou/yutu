@@ -126,11 +126,11 @@ jq -n \
 
 ```fish
 function ydescribe
-    printf '%s\n' '{"jsonrpc":"2.0","method":"describe","id":1}' | $BINARY executa | jq .
+    printf '%s\n' '{"jsonrpc":"2.0","method":"describe","id":1}' | $BINARY | jq .
 end
 
 function yhealth
-    printf '%s\n' '{"jsonrpc":"2.0","method":"health","id":2}' | $BINARY executa | jq .
+    printf '%s\n' '{"jsonrpc":"2.0","method":"health","id":2}' | $BINARY | jq .
 end
 
 function ycat
@@ -155,7 +155,7 @@ function yresp_file
         --arg auth_file "$YUTU_AUTH_FILE" \
         '{jsonrpc:"2.0",method:"invoke",params:{tool:"run_yutu",arguments:{command:$command,cwd:$cwd},context:{credentials:{YUTU_AUTHORIZED_USER_FILE:$auth_file}}},id:3}')
 
-    set -l resp (printf '%s\n' $req | $BINARY executa)
+    set -l resp (printf '%s\n' $req | $BINARY)
     printf '%s\n' $resp | jq -r '.__file_transport'
 end
 
@@ -299,7 +299,7 @@ set -l req (jq -nc \
   --arg auth_file "$YUTU_AUTH_FILE" \
   '{jsonrpc:"2.0",method:"invoke",params:{tool:"run_yutu",arguments:{command:["version"],cwd:$cwd},context:{credentials:{YUTU_AUTHORIZED_USER_FILE:$auth_file}}},id:1}')
 
-printf '%s\n' $req | $BINARY executa
+printf '%s\n' $req | $BINARY
 ```
 
 如果实现正确，这里应该直接返回类似下面这样的单行 JSON：
@@ -316,7 +316,7 @@ set -l req (jq -nc \
   --arg auth_file "$YUTU_AUTH_FILE" \
   '{jsonrpc:"2.0",method:"invoke",params:{tool:"run_yutu",arguments:{command:["search","list","--q","golang","--maxResults","3"],cwd:$cwd},context:{credentials:{YUTU_AUTHORIZED_USER_FILE:$auth_file}}},id:2}')
 
-printf '%s\n' $req | $BINARY executa
+printf '%s\n' $req | $BINARY
 ```
 
 ### 查看 `__file_transport` 指向的完整响应文件
@@ -324,5 +324,5 @@ printf '%s\n' $req | $BINARY executa
 在确认 stdout 里确实返回了 `__file_transport` 之后，再执行：
 
 ```fish
-cat (printf '%s\n' $req | $BINARY executa | jq -r '.__file_transport')
+cat (printf '%s\n' $req | $BINARY | jq -r '.__file_transport')
 ```

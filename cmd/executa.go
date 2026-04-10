@@ -111,6 +111,16 @@ func init() {
 	RootCmd.AddCommand(executaCmd)
 }
 
+func ExecuteExecuta(ctx context.Context, executablePath string, in io.Reader, stdout, stderr io.Writer) error {
+	server := executaServer{
+		executablePath: executablePath,
+		stdout:         stdout,
+		stderr:         stderr,
+		now:            time.Now,
+	}
+	return server.Serve(ctx, in)
+}
+
 func (s executaServer) Serve(ctx context.Context, in io.Reader) error {
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024)

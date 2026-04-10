@@ -16,6 +16,7 @@ NC='\033[0m'
 
 PLUGIN_NAME="yutu-executa"
 CMD_PKG="github.com/eat-pray-ai/yutu/cmd"
+PLUGIN_PKG="./cmd/yutu-executa"
 BUILD_ALL=false
 RUN_TEST=false
 PACKAGE=false
@@ -62,11 +63,11 @@ build_one() {
     if [[ -n "${goarm}" ]]; then
         GOOS="${goos}" GOARCH="${goarch}" GOARM="${goarm}" \
             go build -ldflags "$(ldflags_for "${goos}" "${goarch}")" \
-            -o "dist/${PLUGIN_NAME}-${platform_key}${suffix}" .
+            -o "dist/${PLUGIN_NAME}-${platform_key}${suffix}" "${PLUGIN_PKG}"
     else
         GOOS="${goos}" GOARCH="${goarch}" \
             go build -ldflags "$(ldflags_for "${goos}" "${goarch}")" \
-            -o "dist/${PLUGIN_NAME}-${platform_key}${suffix}" .
+            -o "dist/${PLUGIN_NAME}-${platform_key}${suffix}" "${PLUGIN_PKG}"
     fi
 }
 
@@ -96,7 +97,7 @@ if [[ "${BUILD_ALL}" == "true" ]]; then
 else
     host_goos="$(go env GOOS)"
     host_goarch="$(go env GOARCH)"
-    go build -ldflags "$(ldflags_for "${host_goos}" "${host_goarch}")" -o "dist/${PLUGIN_NAME}" .
+    go build -ldflags "$(ldflags_for "${host_goos}" "${host_goarch}")" -o "dist/${PLUGIN_NAME}" "${PLUGIN_PKG}"
     size="$(du -h "dist/${PLUGIN_NAME}" | cut -f1)"
     echo -e "${GREEN}构建成功！${NC} dist/${PLUGIN_NAME} (${size})"
 fi
@@ -130,7 +131,7 @@ if [[ "${RUN_TEST}" == "true" ]]; then
         echo -e "${CYAN}── 协议测试 ──────────────────────────────────${NC}"
 
         echo -e "  [describe]..."
-        result="$(echo '{"jsonrpc":"2.0","method":"describe","id":1}' | "${binary}" executa 2>/dev/null)"
+        result="$(echo '{"jsonrpc":"2.0","method":"describe","id":1}' | "${binary}" 2>/dev/null)"
         if echo "${result}" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['result']['name']=='yutu-executa'; assert d['result']['tools'][0]['name']=='run_yutu'" 2>/dev/null; then
             echo -e "  ${GREEN}✅ describe 通过${NC}"
         else
@@ -139,7 +140,7 @@ if [[ "${RUN_TEST}" == "true" ]]; then
         fi
 
         echo -e "  [health]..."
-        result="$(echo '{"jsonrpc":"2.0","method":"health","id":2}' | "${binary}" executa 2>/dev/null)"
+        result="$(echo '{"jsonrpc":"2.0","method":"health","id":2}' | "${binary}" 2>/dev/null)"
         if echo "${result}" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['result']['status']=='healthy'" 2>/dev/null; then
             echo -e "  ${GREEN}✅ health 通过${NC}"
         else
@@ -166,8 +167,8 @@ print(json.dumps({
 }))
 PY
 )"
-        result="$(printf '%s\n' "${request}" | "${binary}" executa 2>/dev/null)"
-        if echo "${result}" | python3 -c "import sys,json,os; d=json.load(sys.stdin); assert d['result']['success'] is True; path=d['result']['data']['output_file']; assert os.path.isfile(path)" 2>/dev/null; then
+        result="$(printf '%s\n' "${request}" | "${binary}" 2>/dev/null)"
+        if echo "${result}" | python3 -c "import sys,json,os; d=json.load(sys.stdin); path=d['__file_transport']; assert os.path.isfile(path); resp=json.load(open(path)); assert resp['result']['success'] is True" 2>/dev/null; then
             echo -e "  ${GREEN}✅ invoke 通过${NC}"
         else
             echo -e "  ${RED}❌ invoke 失败${NC}"
@@ -182,5 +183,5 @@ fi
 echo ""
 echo -e "${CYAN}── 下一步 ────────────────────────────────────${NC}"
 echo -e "  Anna Binary package: dist/packages/${PLUGIN_NAME}-<platform>.tar.gz"
-echo -e "  Local run: ./dist/${PLUGIN_NAME} executa"
+echo -e "  Local run: ./dist/${PLUGIN_NAME}"
 echo ""
