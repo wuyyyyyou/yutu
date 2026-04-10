@@ -33,6 +33,7 @@
 - [Installation](#installation)
 - [Agent](#agent)
 - [MCP Server](#mcp-server)
+- [Executa Plugin](#executa-plugin)
 - [Skills](#skills)
 - [Usage](#usage)
 - [Features](#features)
@@ -242,6 +243,24 @@ You can add `yutu` as a MCP server in VS Code or Cursor by clicking correspondin
     }
   }
 }
+```
+
+## Executa Plugin
+
+`yutu` can run as an Anna Executa plugin via:
+
+```shell
+❯ yutu executa
+```
+
+The plugin exposes a single `run_yutu` tool that accepts a `command` argv array and an optional `cwd`. Results are always written to a file inside `cwd`, and if the target command supports `--output`, the plugin defaults it to `json`.
+
+For Anna credential injection, the plugin supports `YUTU_AUTHORIZED_USER_FILE`, which should point to a local Google `authorized_user` JSON file. See [docs/EXECUTA.md](./docs/EXECUTA.md) for details.
+
+For multi-platform Binary packaging, use:
+
+```shell
+❯ ./scripts/build-executa.sh --package
 ```
 
 ## Skills

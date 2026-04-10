@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"fmt"
 	"runtime/debug"
 
 	"github.com/savioxavier/termlink"
@@ -51,9 +52,10 @@ var versionCmd = &cobra.Command{
 			}
 		}
 
-		cmd.Printf("🐰yutu %s %s/%s\n", Version, Os, Arch)
-		cmd.Printf("📦build %s-%s\n", Builder, CommitDate)
-		cmd.Printf("🌟Star: %s\n", termlink.Link(repo, repoUrl))
+		writer := cmd.OutOrStdout()
+		_, _ = fmt.Fprintf(writer, "🐰yutu %s %s/%s\n", Version, Os, Arch)
+		_, _ = fmt.Fprintf(writer, "📦build %s-%s\n", Builder, CommitDate)
+		_, _ = fmt.Fprintf(writer, "🌟Star: %s\n", termlink.Link(repo, repoUrl))
 	},
 }
 
