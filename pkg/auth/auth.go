@@ -75,13 +75,16 @@ func (s *svc) GetService() (*youtube.Service, error) {
 }
 
 func (s *svc) refreshClient() (client *http.Client, err error) {
-	config, err := s.getConfig()
-	if err != nil {
-		return nil, err
-	}
 	authedToken := &oauth2.Token{}
 	err = json.Unmarshal([]byte(s.CacheToken), authedToken)
 	if err != nil {
+		if strings.TrimSpace(s.Credential) == "" {
+			return nil, fmt.Errorf("%s: missing OAuth client secret", parseSecretFailed)
+		}
+		config, err := s.getConfig()
+		if err != nil {
+			return nil, err
+		}
 		client, authedToken, err = s.newClient(config)
 		if err != nil {
 			return nil, err
@@ -92,6 +95,19 @@ func (s *svc) refreshClient() (client *http.Client, err error) {
 			}
 		}
 		return client, nil
+	}
+
+	if authedToken.Valid() && (strings.TrimSpace(s.Credential) == "" || authedToken.RefreshToken == "") {
+		return oauth2.NewClient(s.ctx, oauth2.StaticTokenSource(authedToken)), nil
+	}
+
+	if strings.TrimSpace(s.Credential) == "" {
+		return nil, fmt.Errorf("%s: missing OAuth client secret", parseSecretFailed)
+	}
+
+	config, err := s.getConfig()
+	if err != nil {
+		return nil, err
 	}
 
 	if !authedToken.Valid() {

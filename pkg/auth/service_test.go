@@ -143,3 +143,32 @@ func TestGetService_Errors(t *testing.T) {
 		t.Fatalf("GetService() error = %v, want contains %q", err, parseSecretFailed)
 	}
 }
+
+func TestWithCredentialSkipsDefaultFileWhenCacheTokenEnvExists(t *testing.T) {
+	t.Setenv("YUTU_CACHE_TOKEN", cacheToken)
+
+	s := NewY2BService(WithCredential("", fstest.MapFS{})).(*svc)
+	if s.initErr != nil {
+		t.Fatalf("WithCredential() initErr = %v, want nil", s.initErr)
+	}
+	if s.Credential != "" {
+		t.Fatalf("WithCredential() Credential = %q, want empty", s.Credential)
+	}
+}
+
+func TestRefreshClientWithAccessTokenOnly(t *testing.T) {
+	t.Parallel()
+
+	s := &svc{
+		CacheToken: cacheToken,
+		ctx:        context.Background(),
+	}
+
+	client, err := s.refreshClient()
+	if err != nil {
+		t.Fatalf("refreshClient() error = %v", err)
+	}
+	if client == nil {
+		t.Fatal("refreshClient() client = nil, want non-nil")
+	}
+}

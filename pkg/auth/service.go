@@ -72,6 +72,8 @@ func WithCredential(cred string, fsys fs.FS) Option {
 		envCred, ok := os.LookupEnv("YUTU_CREDENTIAL")
 		if cred == "" && ok {
 			cred = envCred
+		} else if cred == "" && hasDirectCacheTokenEnv() {
+			return
 		} else if cred == "" {
 			cred = s.credFile
 		}
@@ -104,6 +106,20 @@ func WithCredential(cred string, fsys fs.FS) Option {
 			slog.Error(parseSecretFailed, "hint", authHint, "error", err)
 		}
 	}
+}
+
+func hasDirectCacheTokenEnv() bool {
+	envToken, ok := os.LookupEnv("YUTU_CACHE_TOKEN")
+	if !ok {
+		return false
+	}
+
+	envToken = strings.TrimSpace(envToken)
+	if envToken == "" {
+		return false
+	}
+
+	return utils.IsJson(envToken)
 }
 
 func WithCacheToken(token string, fsys fs.FS) Option {

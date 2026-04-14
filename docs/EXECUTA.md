@@ -46,9 +46,15 @@ yutu executa
 
 ## 3. 凭据输入
 
-插件支持一个可选的 Executa credential：
+插件支持两个可选的 Executa credential：
 
+- `GOOGLE_ACCESS_TOKEN`
 - `YUTU_AUTHORIZED_USER_FILE`
+
+优先级如下：
+
+1. 如果提供了 `GOOGLE_ACCESS_TOKEN`，优先使用它，并将其转换成 `YUTU_CACHE_TOKEN`
+2. 如果没有 `GOOGLE_ACCESS_TOKEN`，再读取 `YUTU_AUTHORIZED_USER_FILE`
 
 它应当指向你本地一个 Google `authorized_user` JSON 文件，格式类似：
 
@@ -61,7 +67,9 @@ yutu executa
 }
 ```
 
-运行时，插件会把这个文件内容转换成 `YUTU_CREDENTIAL` 和 `YUTU_CACHE_TOKEN` 环境变量，再去调用 `yutu` CLI。
+`GOOGLE_ACCESS_TOKEN` 适合你已经拿到可直接使用的 OAuth access token 的场景。
+
+`YUTU_AUTHORIZED_USER_FILE` 适合你只有 Google `authorized_user` JSON 的场景。运行时，插件会把这个文件内容转换成 `YUTU_CREDENTIAL` 和 `YUTU_CACHE_TOKEN` 环境变量，再去调用 `yutu` CLI。
 
 ## 4. Tool 输入格式
 

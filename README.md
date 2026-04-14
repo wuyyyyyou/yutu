@@ -255,7 +255,7 @@ You can add `yutu` as a MCP server in VS Code or Cursor by clicking correspondin
 
 The plugin exposes a single `run_yutu` tool that accepts a `command` argv array and an optional `cwd`. Results are always written to a file inside `cwd`, and if the target command supports `--output`, the plugin defaults it to `json`.
 
-For Anna credential injection, the plugin supports `YUTU_AUTHORIZED_USER_FILE`, which should point to a local Google `authorized_user` JSON file. See [docs/EXECUTA.md](./docs/EXECUTA.md) for details.
+For Anna credential injection, the plugin supports two inputs. `GOOGLE_ACCESS_TOKEN` takes priority and is used directly as a bearer token. If it is absent, the plugin falls back to `YUTU_AUTHORIZED_USER_FILE`, which should point to a local Google `authorized_user` JSON file. See [docs/EXECUTA.md](./docs/EXECUTA.md) for details.
 
 For multi-platform Binary packaging, use:
 

@@ -66,7 +66,7 @@ func TestEnsureJSONOutput(t *testing.T) {
 	}
 }
 
-func TestBuildAuthorizedUserEnv(t *testing.T) {
+func TestBuildExecutaEnvWithAuthorizedUserFile(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -76,12 +76,12 @@ func TestBuildAuthorizedUserEnv(t *testing.T) {
 		t.Fatalf("os.WriteFile() error = %v", err)
 	}
 
-	envs, err := buildAuthorizedUserEnv(map[string]any{executaCredentialName: authFile})
+	envs, err := buildExecutaEnv(map[string]any{executaAuthorizedUserCredential: authFile})
 	if err != nil {
-		t.Fatalf("buildAuthorizedUserEnv() error = %v", err)
+		t.Fatalf("buildExecutaEnv() error = %v", err)
 	}
 	if len(envs) != 2 {
-		t.Fatalf("buildAuthorizedUserEnv() got %d envs, want 2", len(envs))
+		t.Fatalf("buildExecutaEnv() got %d envs, want 2", len(envs))
 	}
 
 	var gotCredential map[string]any
@@ -99,6 +99,60 @@ func TestBuildAuthorizedUserEnv(t *testing.T) {
 	}
 	if gotToken["refresh_token"] != "ref" {
 		t.Fatalf("refresh_token = %v, want ref", gotToken["refresh_token"])
+	}
+}
+
+func TestBuildExecutaEnvWithAccessToken(t *testing.T) {
+	t.Parallel()
+
+	envs, err := buildExecutaEnv(map[string]any{executaAccessTokenCredential: "ya29.test-token"})
+	if err != nil {
+		t.Fatalf("buildExecutaEnv() error = %v", err)
+	}
+	if len(envs) != 1 {
+		t.Fatalf("buildExecutaEnv() got %d envs, want 1", len(envs))
+	}
+	if envs[0][:len("YUTU_CACHE_TOKEN=")] != "YUTU_CACHE_TOKEN=" {
+		t.Fatalf("buildExecutaEnv() got %q, want YUTU_CACHE_TOKEN", envs[0])
+	}
+
+	var gotToken map[string]any
+	if err := json.Unmarshal([]byte(envs[0][len("YUTU_CACHE_TOKEN="):]), &gotToken); err != nil {
+		t.Fatalf("json.Unmarshal(YUTU_CACHE_TOKEN) error = %v", err)
+	}
+	if gotToken["access_token"] != "ya29.test-token" {
+		t.Fatalf("access_token = %v, want ya29.test-token", gotToken["access_token"])
+	}
+	if gotToken["token_type"] != "Bearer" {
+		t.Fatalf("token_type = %v, want Bearer", gotToken["token_type"])
+	}
+}
+
+func TestBuildExecutaEnvPrefersAccessToken(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	authFile := filepath.Join(dir, "authorized_user.json")
+	content := `{"client_id":"cid","client_secret":"sec","refresh_token":"ref","type":"authorized_user"}`
+	if err := os.WriteFile(authFile, []byte(content), 0600); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	envs, err := buildExecutaEnv(map[string]any{
+		executaAccessTokenCredential:    "ya29.preferred",
+		executaAuthorizedUserCredential: authFile,
+	})
+	if err != nil {
+		t.Fatalf("buildExecutaEnv() error = %v", err)
+	}
+	if len(envs) != 1 {
+		t.Fatalf("buildExecutaEnv() got %d envs, want 1", len(envs))
+	}
+	if envs[0][:len("YUTU_CACHE_TOKEN=")] != "YUTU_CACHE_TOKEN=" {
+		t.Fatalf("buildExecutaEnv() got %q, want YUTU_CACHE_TOKEN", envs[0])
+	}
+	if bytes.Contains([]byte(envs[0]), []byte("YUTU_CREDENTIAL=")) {
+		t.Fatalf("buildExecutaEnv() unexpectedly included YUTU_CREDENTIAL: %v", envs)
 	}
 }
 

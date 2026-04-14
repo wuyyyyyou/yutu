@@ -23,11 +23,12 @@ import (
 )
 
 const (
-	executaShort           = "Run the Anna Executa plugin server over stdio"
-	executaLong            = "Run yutu as an Anna Executa plugin over stdio JSON-RPC 2.0."
-	executaExample         = "yutu executa"
-	executaMaxMessageBytes = 512 * 1024
-	executaCredentialName  = "YUTU_AUTHORIZED_USER_FILE"
+	executaShort                    = "Run the Anna Executa plugin server over stdio"
+	executaLong                     = "Run yutu as an Anna Executa plugin over stdio JSON-RPC 2.0."
+	executaExample                  = "yutu executa"
+	executaMaxMessageBytes          = 512 * 1024
+	executaAuthorizedUserCredential = "YUTU_AUTHORIZED_USER_FILE"
+	executaAccessTokenCredential    = "GOOGLE_ACCESS_TOKEN"
 )
 
 var (
@@ -189,7 +190,14 @@ func (s executaServer) manifest() map[string]any {
 		"author":       "eat-pray-ai & OpenWaygate",
 		"credentials": []map[string]any{
 			{
-				"name":         executaCredentialName,
+				"name":         executaAccessTokenCredential,
+				"display_name": "Google Access Token",
+				"description":  "OAuth access token for direct YouTube API calls. When present, it is used before YUTU_AUTHORIZED_USER_FILE.",
+				"required":     false,
+				"sensitive":    true,
+			},
+			{
+				"name":         executaAuthorizedUserCredential,
 				"display_name": "Authorized User JSON Path",
 				"description":  "Absolute path to a local Google authorized_user JSON file containing client_id, client_secret, and refresh_token.",
 				"required":     false,
@@ -286,7 +294,7 @@ func (s executaServer) handleInvoke(ctx context.Context, req executaRequest) exe
 	}
 
 	credentials := extractExecutaCredentials(req.Params)
-	envAdditions, err := buildAuthorizedUserEnv(credentials)
+	envAdditions, err := buildExecutaEnv(credentials)
 	if err != nil {
 		return executaResponse{
 			JSONRPC: "2.0",
@@ -457,10 +465,28 @@ func extractExecutaCredentials(params map[string]any) map[string]any {
 	return credentials
 }
 
-func buildAuthorizedUserEnv(credentials map[string]any) ([]string, error) {
-	path := lookupCredentialValue(credentials, executaCredentialName)
+func buildExecutaEnv(credentials map[string]any) ([]string, error) {
+	accessToken := lookupCredentialValue(credentials, executaAccessTokenCredential)
+	if accessToken == "" {
+		accessToken = strings.TrimSpace(os.Getenv(executaAccessTokenCredential))
+	}
+	if accessToken != "" {
+		cacheTokenJSON, err := json.Marshal(map[string]any{
+			"access_token": accessToken,
+			"token_type":   "Bearer",
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to build YUTU_CACHE_TOKEN from %s: %w", executaAccessTokenCredential, err)
+		}
+
+		return []string{
+			"YUTU_CACHE_TOKEN=" + string(cacheTokenJSON),
+		}, nil
+	}
+
+	path := lookupCredentialValue(credentials, executaAuthorizedUserCredential)
 	if path == "" {
-		path = os.Getenv(executaCredentialName)
+		path = os.Getenv(executaAuthorizedUserCredential)
 	}
 	if path == "" {
 		return nil, nil
@@ -468,7 +494,7 @@ func buildAuthorizedUserEnv(credentials map[string]any) ([]string, error) {
 
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read %s: %w", executaCredentialName, err)
+		return nil, fmt.Errorf("failed to read %s: %w", executaAuthorizedUserCredential, err)
 	}
 
 	var credential authorizedUserFile
