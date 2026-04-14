@@ -56,6 +56,8 @@ yutu executa
 1. 如果提供了 `GOOGLE_ACCESS_TOKEN`，优先使用它，并将其转换成 `YUTU_CACHE_TOKEN`
 2. 如果没有 `GOOGLE_ACCESS_TOKEN`，再读取 `YUTU_AUTHORIZED_USER_FILE`
 
+如果这两个 credential 都没有提供，插件会直接返回错误，不会再回退到 `yutu` CLI 自己的默认 `client_secret.json` 逻辑。
+
 它应当指向你本地一个 Google `authorized_user` JSON 文件，格式类似：
 
 ```json

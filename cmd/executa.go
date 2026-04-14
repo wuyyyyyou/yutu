@@ -185,7 +185,7 @@ func (s executaServer) manifest() map[string]any {
 	return map[string]any{
 		"name":         "yutu-executa",
 		"display_name": "yutu-executa",
-		"version":      "1.0.0",
+		"version":      "1.0.1",
 		"description":  "Run yutu CLI commands from Anna through a single run_yutu tool.",
 		"author":       "eat-pray-ai & OpenWaygate",
 		"credentials": []map[string]any{
@@ -489,7 +489,11 @@ func buildExecutaEnv(credentials map[string]any) ([]string, error) {
 		path = os.Getenv(executaAuthorizedUserCredential)
 	}
 	if path == "" {
-		return nil, nil
+		return nil, fmt.Errorf(
+			"missing credentials: provide %s or %s",
+			executaAccessTokenCredential,
+			executaAuthorizedUserCredential,
+		)
 	}
 
 	content, err := os.ReadFile(path)

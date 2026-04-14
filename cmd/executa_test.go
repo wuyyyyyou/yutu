@@ -156,6 +156,19 @@ func TestBuildExecutaEnvPrefersAccessToken(t *testing.T) {
 	}
 }
 
+func TestBuildExecutaEnvRequiresCredentials(t *testing.T) {
+	t.Parallel()
+
+	_, err := buildExecutaEnv(nil)
+	if err == nil {
+		t.Fatal("buildExecutaEnv() error = nil, want non-nil")
+	}
+	want := "missing credentials: provide GOOGLE_ACCESS_TOKEN or YUTU_AUTHORIZED_USER_FILE"
+	if err.Error() != want {
+		t.Fatalf("buildExecutaEnv() error = %q, want %q", err.Error(), want)
+	}
+}
+
 func TestResolveExecutaWorkDir(t *testing.T) {
 	t.Parallel()
 
