@@ -184,8 +184,8 @@ func (s executaServer) handleLine(ctx context.Context, line string) executaRespo
 func (s executaServer) manifest() map[string]any {
 	return map[string]any{
 		"name":         "yutu-executa",
-		"display_name": "Yutu",
-		"version":      s.version(),
+		"display_name": "yutu-executa",
+		"version":      "1.0.0",
 		"description":  "Run yutu CLI commands from Anna through a single run_yutu tool.",
 		"author":       "eat-pray-ai & OpenWaygate",
 		"credentials": []map[string]any{
