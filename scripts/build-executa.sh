@@ -168,6 +168,7 @@ checksum_file() {
     local checksum_path="${file_path}.sha256"
     local file_name
     local hash=""
+    local native_file_path=""
     file_name="$(basename "${file_path}")"
 
     if command -v sha256sum >/dev/null 2>&1; then
@@ -175,14 +176,26 @@ checksum_file() {
     elif command -v shasum >/dev/null 2>&1; then
         shasum -a 256 "${file_path}" | awk -v name="${file_name}" '{print $1 "  " name}' > "${checksum_path}"
     elif command -v pwsh >/dev/null 2>&1; then
-        hash="$(pwsh -NoLogo -NoProfile -Command "(Get-FileHash -Algorithm SHA256 -LiteralPath '${file_path}').Hash.ToLower()")"
+        native_file_path="$(native_path "${file_path}")"
+        hash="$(pwsh -NoLogo -NoProfile -Command "(Get-FileHash -Algorithm SHA256 -LiteralPath '${native_file_path}').Hash.ToLower()")"
         printf '%s  %s\n' "${hash}" "${file_name}" > "${checksum_path}"
     elif command -v powershell.exe >/dev/null 2>&1; then
-        hash="$(powershell.exe -NoLogo -NoProfile -Command "(Get-FileHash -Algorithm SHA256 -LiteralPath '${file_path}').Hash.ToLower()" | tr -d '\r')"
+        native_file_path="$(native_path "${file_path}")"
+        hash="$(powershell.exe -NoLogo -NoProfile -Command "(Get-FileHash -Algorithm SHA256 -LiteralPath '${native_file_path}').Hash.ToLower()" | tr -d '\r')"
         printf '%s  %s\n' "${hash}" "${file_name}" > "${checksum_path}"
     else
         echo "No SHA256 tool available for ${file_path}" >&2
         exit 1
+    fi
+}
+
+native_path() {
+    local path_value="$1"
+
+    if command -v cygpath >/dev/null 2>&1; then
+        cygpath -w "${path_value}"
+    else
+        printf '%s\n' "${path_value}"
     fi
 }
 
@@ -192,6 +205,8 @@ package_binary() {
     local package_path=""
     local staged_name="${PLUGIN_NAME}"
     local stage_dir=""
+    local native_stage_path=""
+    local native_package_path=""
 
     mkdir -p dist/packages
     stage_dir="$(mktemp -d "${REPO_ROOT}/dist/package-${platform_key}-XXXXXX")"
@@ -202,9 +217,13 @@ package_binary() {
         if command -v zip >/dev/null 2>&1; then
             (cd "${stage_dir}" && zip -jq "${REPO_ROOT}/${package_path}" "${staged_name}")
         elif command -v pwsh >/dev/null 2>&1; then
-            pwsh -NoLogo -NoProfile -Command "Compress-Archive -Force -LiteralPath '${stage_dir}/${staged_name}' -DestinationPath '${REPO_ROOT}/${package_path}'"
+            native_stage_path="$(native_path "${stage_dir}/${staged_name}")"
+            native_package_path="$(native_path "${REPO_ROOT}/${package_path}")"
+            pwsh -NoLogo -NoProfile -Command "New-Item -ItemType Directory -Force -Path (Split-Path -Parent '${native_package_path}') | Out-Null; Compress-Archive -Force -LiteralPath '${native_stage_path}' -DestinationPath '${native_package_path}'"
         elif command -v powershell.exe >/dev/null 2>&1; then
-            powershell.exe -NoLogo -NoProfile -Command "Compress-Archive -Force -LiteralPath '${stage_dir}/${staged_name}' -DestinationPath '${REPO_ROOT}/${package_path}'" >/dev/null
+            native_stage_path="$(native_path "${stage_dir}/${staged_name}")"
+            native_package_path="$(native_path "${REPO_ROOT}/${package_path}")"
+            powershell.exe -NoLogo -NoProfile -Command "New-Item -ItemType Directory -Force -Path (Split-Path -Parent '${native_package_path}') | Out-Null; Compress-Archive -Force -LiteralPath '${native_stage_path}' -DestinationPath '${native_package_path}'" >/dev/null
         else
             echo "No ZIP tool available for ${binary_path}" >&2
             rm -rf "${stage_dir}"
