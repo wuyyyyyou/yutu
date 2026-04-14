@@ -1,0 +1,124 @@
+name: Executa Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to create or update
+        required: true
+        type: string
+      release_name:
+        description: Release title; defaults to tag when omitted
+        required: false
+        type: string
+      target:
+        description: Branch or commit for the release tag
+        required: false
+        default: main
+        type: string
+      prerelease:
+        description: Mark the release as prerelease when creating it
+        required: false
+        default: false
+        type: boolean
+
+permissions: read-all
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.runs_on }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin-amd64
+            runs_on: macos-15-intel
+          - platform: darwin-arm64
+            runs_on: macos-latest
+          - platform: windows-amd64
+            runs_on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: ./go.mod
+
+      - name: Build and package
+        shell: bash
+        run: |
+          ./scripts/build-executa.sh --package --platform "${{ matrix.platform }}"
+
+      - name: Upload packaged asset
+        uses: actions/upload-artifact@v6
+        with:
+          name: executa-${{ matrix.platform }}
+          path: |
+            dist/packages/yutu-executa-${{ matrix.platform }}.*
+
+  release:
+    name: Publish Release
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download packaged assets
+        uses: actions/download-artifact@v7
+        with:
+          pattern: executa-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create or update release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_RELEASE_NAME: ${{ inputs.release_name }}
+          INPUT_TARGET: ${{ inputs.target }}
+          INPUT_PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          set -euo pipefail
+
+          release_name="${INPUT_RELEASE_NAME:-$INPUT_TAG}"
+          declare -a assets=()
+          while IFS= read -r path; do
+            assets+=("${path}")
+          done < <(find release-assets -maxdepth 1 -type f | sort)
+
+          if [[ "${#assets[@]}" -eq 0 ]]; then
+            echo "no release assets were downloaded" >&2
+            exit 1
+          fi
+
+          if gh release view "${INPUT_TAG}" --repo "${GH_REPO}" >/dev/null 2>&1; then
+            gh release edit "${INPUT_TAG}" \
+              --repo "${GH_REPO}" \
+              --title "${release_name}"
+          else
+            declare -a create_args=(
+              "${INPUT_TAG}"
+              "--repo" "${GH_REPO}"
+              "--target" "${INPUT_TARGET}"
+              "--title" "${release_name}"
+              "--generate-notes"
+            )
+
+            if [[ "${INPUT_PRERELEASE}" == "true" ]]; then
+              create_args+=("--prerelease")
+            fi
+
+            gh release create "${create_args[@]}"
+          fi
+
+          gh release upload "${INPUT_TAG}" "${assets[@]}" \
+            --repo "${GH_REPO}" \
+            --clobber

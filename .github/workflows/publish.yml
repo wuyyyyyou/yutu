@@ -1,13 +1,6 @@
 name: Go releaser
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*"
-      - "*.*.*-rc*"
-      - "*.*.*-beta*"
-      - "*.*.*-alpha*"
-      - "*.*.*-dev*"
 
 permissions: read-all
 

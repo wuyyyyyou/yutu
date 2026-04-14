@@ -20,22 +20,114 @@ PLUGIN_PKG="./cmd/yutu-executa"
 BUILD_ALL=false
 RUN_TEST=false
 PACKAGE=false
+declare -a SELECTED_PLATFORMS=()
 
-for arg in "$@"; do
-    case "$arg" in
-        --all)     BUILD_ALL=true ;;
-        --test)    RUN_TEST=true ;;
-        --package) PACKAGE=true; BUILD_ALL=true ;;
+ALL_PLATFORMS=(
+    "darwin-arm64"
+    "darwin-amd64"
+    "linux-amd64"
+    "linux-arm64"
+    "linux-armv7"
+    "windows-amd64"
+    "windows-arm64"
+)
+
+usage() {
+    cat <<'EOF'
+Usage: ./scripts/build-executa.sh [--all] [--platform <name>] [--test] [--package]
+
+Options:
+  --all                 Build all supported targets
+  --platform <name>     Build only the selected target; may be repeated
+  --test                Run lightweight protocol tests after building
+  --package             Create archives and .sha256 files for built binaries
+  --help, -h            Show this help
+
+Supported platform names:
+  darwin-arm64
+  darwin-amd64
+  linux-amd64
+  linux-arm64
+  linux-armv7
+  windows-amd64
+  windows-arm64
+EOF
+}
+
+parse_platform() {
+    local platform_key="$1"
+
+    case "${platform_key}" in
+        darwin-arm64)
+            printf '%s %s %s %s\n' "darwin-arm64" "darwin" "arm64" ""
+            ;;
+        darwin-amd64)
+            printf '%s %s %s %s\n' "darwin-amd64" "darwin" "amd64" ""
+            ;;
+        linux-amd64)
+            printf '%s %s %s %s\n' "linux-amd64" "linux" "amd64" ""
+            ;;
+        linux-arm64)
+            printf '%s %s %s %s\n' "linux-arm64" "linux" "arm64" ""
+            ;;
+        linux-armv7)
+            printf '%s %s %s %s\n' "linux-armv7" "linux" "arm" "7"
+            ;;
+        windows-amd64)
+            printf '%s %s %s %s\n' "windows-amd64" "windows" "amd64" ""
+            ;;
+        windows-arm64)
+            printf '%s %s %s %s\n' "windows-arm64" "windows" "arm64" ""
+            ;;
+        *)
+            echo "Unsupported platform: ${platform_key}" >&2
+            exit 1
+            ;;
+    esac
+}
+
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        --all)
+            BUILD_ALL=true
+            shift
+            ;;
+        --platform)
+            if [[ "$#" -lt 2 ]]; then
+                echo "--platform requires a value" >&2
+                exit 1
+            fi
+            parse_platform "$2" >/dev/null
+            SELECTED_PLATFORMS+=("$2")
+            shift 2
+            ;;
+        --test)
+            RUN_TEST=true
+            shift
+            ;;
+        --package)
+            PACKAGE=true
+            shift
+            ;;
         --help|-h)
-            echo "Usage: $0 [--all] [--test] [--package]"
+            usage
             exit 0
             ;;
         *)
-            echo "Unknown argument: $arg" >&2
+            echo "Unknown argument: $1" >&2
             exit 1
             ;;
     esac
 done
+
+if [[ "${BUILD_ALL}" == "true" && "${#SELECTED_PLATFORMS[@]}" -gt 0 ]]; then
+    echo "--all cannot be combined with --platform" >&2
+    exit 1
+fi
+
+if [[ "${PACKAGE}" == "true" && "${BUILD_ALL}" != "true" && "${#SELECTED_PLATFORMS[@]}" -eq 0 ]]; then
+    BUILD_ALL=true
+fi
 
 version="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
 commit="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
@@ -71,6 +163,55 @@ build_one() {
     fi
 }
 
+checksum_file() {
+    local file_path="$1"
+    local checksum_path="${file_path}.sha256"
+    local file_name
+    local hash=""
+    file_name="$(basename "${file_path}")"
+
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "${file_path}" | awk -v name="${file_name}" '{print $1 "  " name}' > "${checksum_path}"
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "${file_path}" | awk -v name="${file_name}" '{print $1 "  " name}' > "${checksum_path}"
+    elif command -v pwsh >/dev/null 2>&1; then
+        hash="$(pwsh -NoLogo -NoProfile -Command "(Get-FileHash -Algorithm SHA256 -LiteralPath '${file_path}').Hash.ToLower()")"
+        printf '%s  %s\n' "${hash}" "${file_name}" > "${checksum_path}"
+    elif command -v powershell.exe >/dev/null 2>&1; then
+        hash="$(powershell.exe -NoLogo -NoProfile -Command "(Get-FileHash -Algorithm SHA256 -LiteralPath '${file_path}').Hash.ToLower()" | tr -d '\r')"
+        printf '%s  %s\n' "${hash}" "${file_name}" > "${checksum_path}"
+    else
+        echo "No SHA256 tool available for ${file_path}" >&2
+        exit 1
+    fi
+}
+
+package_binary() {
+    local binary_path="$1"
+    local platform_key="$2"
+    local package_path=""
+
+    mkdir -p dist/packages
+    if [[ "${binary_path}" == *.exe ]]; then
+        package_path="dist/packages/${PLUGIN_NAME}-${platform_key}.zip"
+        if command -v zip >/dev/null 2>&1; then
+            (cd dist && zip -jq "packages/${PLUGIN_NAME}-${platform_key}.zip" "$(basename "${binary_path}")")
+        elif command -v pwsh >/dev/null 2>&1; then
+            pwsh -NoLogo -NoProfile -Command "Compress-Archive -Force -LiteralPath '${binary_path}' -DestinationPath '${package_path}'"
+        elif command -v powershell.exe >/dev/null 2>&1; then
+            powershell.exe -NoLogo -NoProfile -Command "Compress-Archive -Force -LiteralPath '${binary_path}' -DestinationPath '${package_path}'" >/dev/null
+        else
+            echo "No ZIP tool available for ${binary_path}" >&2
+            exit 1
+        fi
+    else
+        package_path="dist/packages/${PLUGIN_NAME}-${platform_key}.tar.gz"
+        (cd dist && tar czf "packages/${PLUGIN_NAME}-${platform_key}.tar.gz" "$(basename "${binary_path}")")
+    fi
+
+    checksum_file "${package_path}"
+}
+
 echo -e "${CYAN}============================================================${NC}"
 echo -e "${CYAN}  Yutu Executa Binary Builder${NC}"
 echo -e "${CYAN}============================================================${NC}"
@@ -83,38 +224,51 @@ echo ""
 rm -rf dist/
 mkdir -p dist
 
-if [[ "${BUILD_ALL}" == "true" ]]; then
-    build_one "darwin-arm64" "darwin" "arm64"
-    build_one "darwin-x86_64" "darwin" "amd64"
-    build_one "linux-x86_64" "linux" "amd64"
-    build_one "linux-aarch64" "linux" "arm64"
-    build_one "linux-armv7l" "linux" "arm" "7"
-    build_one "windows-x86_64" "windows" "amd64"
-    build_one "windows-arm64" "windows" "arm64"
+declare -a BUILT_BINARIES=()
+
+if [[ "${BUILD_ALL}" == "true" || "${#SELECTED_PLATFORMS[@]}" -gt 0 ]]; then
+    if [[ "${BUILD_ALL}" == "true" ]]; then
+        SELECTED_PLATFORMS=("${ALL_PLATFORMS[@]}")
+    fi
+
+    for platform_key in "${SELECTED_PLATFORMS[@]}"; do
+        read -r normalized_key goos goarch goarm <<<"$(parse_platform "${platform_key}")"
+        build_one "${normalized_key}" "${goos}" "${goarch}" "${goarm}"
+        if [[ "${goos}" == "windows" ]]; then
+            BUILT_BINARIES+=("dist/${PLUGIN_NAME}-${normalized_key}.exe")
+        else
+            BUILT_BINARIES+=("dist/${PLUGIN_NAME}-${normalized_key}")
+        fi
+    done
+
     echo ""
-    echo -e "${GREEN}全平台构建完成！${NC}"
+    if [[ "${#BUILT_BINARIES[@]}" -eq 1 ]]; then
+        echo -e "${GREEN}目标平台构建完成！${NC}"
+    else
+        echo -e "${GREEN}全平台构建完成！${NC}"
+    fi
     ls -lh dist/
 else
     host_goos="$(go env GOOS)"
     host_goarch="$(go env GOARCH)"
-    go build -ldflags "$(ldflags_for "${host_goos}" "${host_goarch}")" -o "dist/${PLUGIN_NAME}" "${PLUGIN_PKG}"
-    size="$(du -h "dist/${PLUGIN_NAME}" | cut -f1)"
-    echo -e "${GREEN}构建成功！${NC} dist/${PLUGIN_NAME} (${size})"
+    host_binary="dist/${PLUGIN_NAME}"
+    if [[ "${host_goos}" == "windows" ]]; then
+        host_binary="${host_binary}.exe"
+    fi
+    go build -ldflags "$(ldflags_for "${host_goos}" "${host_goarch}")" -o "${host_binary}" "${PLUGIN_PKG}"
+    BUILT_BINARIES+=("${host_binary}")
+    size="$(du -h "${host_binary}" | cut -f1)"
+    echo -e "${GREEN}构建成功！${NC} ${host_binary} (${size})"
 fi
 
 if [[ "${PACKAGE}" == "true" ]]; then
     echo ""
     echo -e "${GREEN}打包...${NC}"
-    mkdir -p dist/packages
-    for f in dist/${PLUGIN_NAME}-*; do
-        base="$(basename "${f}")"
-        plat="${base#${PLUGIN_NAME}-}"
-        plat="${plat%.exe}"
-        if [[ "${f}" == *.exe ]]; then
-            (cd dist && zip -j "packages/${PLUGIN_NAME}-${plat}.zip" "${base}")
-        else
-            (cd dist && tar czf "packages/${PLUGIN_NAME}-${plat}.tar.gz" "${base}")
-        fi
+    for binary_path in "${BUILT_BINARIES[@]}"; do
+        base="$(basename "${binary_path}")"
+        platform_key="${base#${PLUGIN_NAME}-}"
+        platform_key="${platform_key%.exe}"
+        package_binary "${binary_path}" "${platform_key}"
     done
     echo ""
     ls -lh dist/packages/
@@ -183,5 +337,9 @@ fi
 echo ""
 echo -e "${CYAN}── 下一步 ────────────────────────────────────${NC}"
 echo -e "  Anna Binary package: dist/packages/${PLUGIN_NAME}-<platform>.tar.gz"
-echo -e "  Local run: ./dist/${PLUGIN_NAME}"
+if [[ "${#BUILT_BINARIES[@]}" -eq 1 ]]; then
+    echo -e "  Local run: ./${BUILT_BINARIES[0]}"
+else
+    echo -e "  Local run: ./dist/${PLUGIN_NAME}"
+fi
 echo ""
