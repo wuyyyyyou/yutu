@@ -190,26 +190,34 @@ package_binary() {
     local binary_path="$1"
     local platform_key="$2"
     local package_path=""
+    local staged_name="${PLUGIN_NAME}"
+    local stage_dir=""
 
     mkdir -p dist/packages
+    stage_dir="$(mktemp -d "${REPO_ROOT}/dist/package-${platform_key}-XXXXXX")"
     if [[ "${binary_path}" == *.exe ]]; then
+        staged_name="${PLUGIN_NAME}.exe"
         package_path="dist/packages/${PLUGIN_NAME}-${platform_key}.zip"
+        cp "${binary_path}" "${stage_dir}/${staged_name}"
         if command -v zip >/dev/null 2>&1; then
-            (cd dist && zip -jq "packages/${PLUGIN_NAME}-${platform_key}.zip" "$(basename "${binary_path}")")
+            (cd "${stage_dir}" && zip -jq "${REPO_ROOT}/${package_path}" "${staged_name}")
         elif command -v pwsh >/dev/null 2>&1; then
-            pwsh -NoLogo -NoProfile -Command "Compress-Archive -Force -LiteralPath '${binary_path}' -DestinationPath '${package_path}'"
+            pwsh -NoLogo -NoProfile -Command "Compress-Archive -Force -LiteralPath '${stage_dir}/${staged_name}' -DestinationPath '${REPO_ROOT}/${package_path}'"
         elif command -v powershell.exe >/dev/null 2>&1; then
-            powershell.exe -NoLogo -NoProfile -Command "Compress-Archive -Force -LiteralPath '${binary_path}' -DestinationPath '${package_path}'" >/dev/null
+            powershell.exe -NoLogo -NoProfile -Command "Compress-Archive -Force -LiteralPath '${stage_dir}/${staged_name}' -DestinationPath '${REPO_ROOT}/${package_path}'" >/dev/null
         else
             echo "No ZIP tool available for ${binary_path}" >&2
+            rm -rf "${stage_dir}"
             exit 1
         fi
     else
         package_path="dist/packages/${PLUGIN_NAME}-${platform_key}.tar.gz"
-        (cd dist && tar czf "packages/${PLUGIN_NAME}-${platform_key}.tar.gz" "$(basename "${binary_path}")")
+        cp "${binary_path}" "${stage_dir}/${staged_name}"
+        (cd "${stage_dir}" && tar czf "${REPO_ROOT}/${package_path}" "${staged_name}")
     fi
 
     checksum_file "${package_path}"
+    rm -rf "${stage_dir}"
 }
 
 echo -e "${CYAN}============================================================${NC}"
