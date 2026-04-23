@@ -183,9 +183,9 @@ func (s executaServer) handleLine(ctx context.Context, line string) executaRespo
 
 func (s executaServer) manifest() map[string]any {
 	return map[string]any{
-		"name":         "yutu-executa",
+		"name":         "tool-lightvoss_5433-youtube-manager-nrfmta5s",
 		"display_name": "yutu-executa",
-		"version":      "1.0.1",
+		"version":      "1.0.2",
 		"description":  "Run yutu CLI commands from Anna through a single run_yutu tool.",
 		"author":       "eat-pray-ai & OpenWaygate",
 		"credentials": []map[string]any{
