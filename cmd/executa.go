@@ -27,6 +27,8 @@ const (
 	executaLong                     = "Run yutu as an Anna Executa plugin over stdio JSON-RPC 2.0."
 	executaExample                  = "yutu executa"
 	executaMaxMessageBytes          = 512 * 1024
+	executaManifestName             = "tool-lightvoss_5433-youtube-manager-nrfmta5s"
+	executaManifestVersion          = "1.0.2"
 	executaAuthorizedUserCredential = "YUTU_AUTHORIZED_USER_FILE"
 	executaAccessTokenCredential    = "GOOGLE_ACCESS_TOKEN"
 )
@@ -183,9 +185,9 @@ func (s executaServer) handleLine(ctx context.Context, line string) executaRespo
 
 func (s executaServer) manifest() map[string]any {
 	return map[string]any{
-		"name":         "tool-lightvoss_5433-youtube-manager-nrfmta5s",
+		"name":         executaManifestName,
 		"display_name": "yutu-executa",
-		"version":      "1.0.2",
+		"version":      executaManifestVersion,
 		"description":  "Run yutu CLI commands from Anna through a single run_yutu tool.",
 		"author":       "eat-pray-ai & OpenWaygate",
 		"credentials": []map[string]any{

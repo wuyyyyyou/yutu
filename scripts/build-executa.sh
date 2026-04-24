@@ -20,6 +20,8 @@ PLUGIN_PKG="./cmd/yutu-executa"
 BUILD_ALL=false
 RUN_TEST=false
 PACKAGE=false
+MANIFEST_NAME=""
+MANIFEST_VERSION=""
 declare -a SELECTED_PLATFORMS=()
 
 ALL_PLATFORMS=(
@@ -203,27 +205,29 @@ package_binary() {
     local binary_path="$1"
     local platform_key="$2"
     local package_path=""
-    local staged_name="${PLUGIN_NAME}"
+    local staged_name="bin/${PLUGIN_NAME}"
     local stage_dir=""
     local native_stage_path=""
     local native_package_path=""
 
     mkdir -p dist/packages
     stage_dir="$(mktemp -d "${REPO_ROOT}/dist/package-${platform_key}-XXXXXX")"
+    mkdir -p "${stage_dir}/bin" "${stage_dir}/lib" "${stage_dir}/data"
     if [[ "${binary_path}" == *.exe ]]; then
-        staged_name="${PLUGIN_NAME}.exe"
+        staged_name="bin/${PLUGIN_NAME}.exe"
         package_path="dist/packages/${PLUGIN_NAME}-${platform_key}.zip"
         cp "${binary_path}" "${stage_dir}/${staged_name}"
+        write_package_manifest "${stage_dir}"
         if command -v zip >/dev/null 2>&1; then
-            (cd "${stage_dir}" && zip -jq "${REPO_ROOT}/${package_path}" "${staged_name}")
+            (cd "${stage_dir}" && zip -qr "${REPO_ROOT}/${package_path}" .)
         elif command -v pwsh >/dev/null 2>&1; then
-            native_stage_path="$(native_path "${stage_dir}/${staged_name}")"
+            native_stage_path="$(native_path "${stage_dir}")"
             native_package_path="$(native_path "${REPO_ROOT}/${package_path}")"
-            pwsh -NoLogo -NoProfile -Command "New-Item -ItemType Directory -Force -Path (Split-Path -Parent '${native_package_path}') | Out-Null; Compress-Archive -Force -LiteralPath '${native_stage_path}' -DestinationPath '${native_package_path}'"
+            pwsh -NoLogo -NoProfile -Command "New-Item -ItemType Directory -Force -Path (Split-Path -Parent '${native_package_path}') | Out-Null; Compress-Archive -Force -LiteralPath '${native_stage_path}/*' -DestinationPath '${native_package_path}'"
         elif command -v powershell.exe >/dev/null 2>&1; then
-            native_stage_path="$(native_path "${stage_dir}/${staged_name}")"
+            native_stage_path="$(native_path "${stage_dir}")"
             native_package_path="$(native_path "${REPO_ROOT}/${package_path}")"
-            powershell.exe -NoLogo -NoProfile -Command "New-Item -ItemType Directory -Force -Path (Split-Path -Parent '${native_package_path}') | Out-Null; Compress-Archive -Force -LiteralPath '${native_stage_path}' -DestinationPath '${native_package_path}'" >/dev/null
+            powershell.exe -NoLogo -NoProfile -Command "New-Item -ItemType Directory -Force -Path (Split-Path -Parent '${native_package_path}') | Out-Null; Compress-Archive -Force -LiteralPath '${native_stage_path}/*' -DestinationPath '${native_package_path}'" >/dev/null
         else
             echo "No ZIP tool available for ${binary_path}" >&2
             rm -rf "${stage_dir}"
@@ -232,11 +236,64 @@ package_binary() {
     else
         package_path="dist/packages/${PLUGIN_NAME}-${platform_key}.tar.gz"
         cp "${binary_path}" "${stage_dir}/${staged_name}"
-        (cd "${stage_dir}" && tar czf "${REPO_ROOT}/${package_path}" "${staged_name}")
+        write_package_manifest "${stage_dir}"
+        (cd "${stage_dir}" && tar czf "${REPO_ROOT}/${package_path}" bin lib data manifest.json)
     fi
 
     checksum_file "${package_path}"
     rm -rf "${stage_dir}"
+}
+
+load_manifest_metadata() {
+    local host_goos=""
+    local host_goarch=""
+    local describe_response=""
+
+    host_goos="$(go env GOOS)"
+    host_goarch="$(go env GOARCH)"
+    describe_response="$({ printf '%s\n' '{"jsonrpc":"2.0","method":"describe","id":1}' | \
+        go run -ldflags "$(ldflags_for "${host_goos}" "${host_goarch}")" "${PLUGIN_PKG}"; } 2>/dev/null)"
+
+    MANIFEST_NAME="$(manifest_response_field "${describe_response}" name)"
+    MANIFEST_VERSION="$(manifest_response_field "${describe_response}" version)"
+
+    if [[ -z "${MANIFEST_NAME}" || -z "${MANIFEST_VERSION}" ]]; then
+        echo "Failed to read name/version from Executa describe" >&2
+        exit 1
+    fi
+}
+
+manifest_response_field() {
+    local response_json="$1"
+    local field_name="$2"
+
+    python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("result", {}).get(sys.argv[2], ""))' "${response_json}" "${field_name}"
+}
+
+write_package_manifest() {
+    local stage_dir="$1"
+
+    cat > "${stage_dir}/manifest.json" <<EOF
+{
+  "name": "${MANIFEST_NAME}",
+  "version": "${MANIFEST_VERSION}",
+  "runtime": {
+    "binary": {
+      "entrypoint": {
+        "default": "bin/${PLUGIN_NAME}",
+        "windows-x86_64": "bin/${PLUGIN_NAME}.exe",
+        "windows-arm64": "bin/${PLUGIN_NAME}.exe"
+      },
+      "lib_dirs": ["lib"],
+      "data_dirs": ["data"],
+      "permissions": {
+        "bin/${PLUGIN_NAME}": "0o755",
+        "bin/${PLUGIN_NAME}.exe": "0o755"
+      }
+    }
+  }
+}
+EOF
 }
 
 echo -e "${CYAN}============================================================${NC}"
@@ -291,6 +348,7 @@ fi
 if [[ "${PACKAGE}" == "true" ]]; then
     echo ""
     echo -e "${GREEN}打包...${NC}"
+    load_manifest_metadata
     for binary_path in "${BUILT_BINARIES[@]}"; do
         base="$(basename "${binary_path}")"
         platform_key="${base#${PLUGIN_NAME}-}"
@@ -313,7 +371,7 @@ if [[ "${RUN_TEST}" == "true" ]]; then
 
         echo -e "  [describe]..."
         result="$(echo '{"jsonrpc":"2.0","method":"describe","id":1}' | "${binary}" 2>/dev/null)"
-        if echo "${result}" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['result']['name']=='yutu-executa'; assert d['result']['tools'][0]['name']=='run_yutu'" 2>/dev/null; then
+        if echo "${result}" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['result']['name']; assert d['result']['version']; assert d['result']['tools'][0]['name']=='run_yutu'" 2>/dev/null; then
             echo -e "  ${GREEN}✅ describe 通过${NC}"
         else
             echo -e "  ${RED}❌ describe 失败${NC}"
