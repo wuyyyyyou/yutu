@@ -28,7 +28,7 @@ const (
 	executaExample                  = "yutu executa"
 	executaMaxMessageBytes          = 512 * 1024
 	executaManifestName             = "tool-lightvoss_5433-youtube-manager-nrfmta5s"
-	executaManifestVersion          = "1.0.2"
+	executaManifestVersion          = "2.0.0"
 	executaAuthorizedUserCredential = "YUTU_AUTHORIZED_USER_FILE"
 	executaAccessTokenCredential    = "GOOGLE_ACCESS_TOKEN"
 )
