@@ -223,11 +223,11 @@ package_binary() {
         elif command -v pwsh >/dev/null 2>&1; then
             native_stage_path="$(native_path "${stage_dir}")"
             native_package_path="$(native_path "${REPO_ROOT}/${package_path}")"
-            pwsh -NoLogo -NoProfile -Command "New-Item -ItemType Directory -Force -Path (Split-Path -Parent '${native_package_path}') | Out-Null; Compress-Archive -Force -LiteralPath '${native_stage_path}/*' -DestinationPath '${native_package_path}'"
+            pwsh -NoLogo -NoProfile -Command "New-Item -ItemType Directory -Force -Path (Split-Path -Parent '${native_package_path}') | Out-Null; Get-ChildItem -LiteralPath '${native_stage_path}' | Compress-Archive -Force -DestinationPath '${native_package_path}'"
         elif command -v powershell.exe >/dev/null 2>&1; then
             native_stage_path="$(native_path "${stage_dir}")"
             native_package_path="$(native_path "${REPO_ROOT}/${package_path}")"
-            powershell.exe -NoLogo -NoProfile -Command "New-Item -ItemType Directory -Force -Path (Split-Path -Parent '${native_package_path}') | Out-Null; Compress-Archive -Force -LiteralPath '${native_stage_path}/*' -DestinationPath '${native_package_path}'" >/dev/null
+            powershell.exe -NoLogo -NoProfile -Command "New-Item -ItemType Directory -Force -Path (Split-Path -Parent '${native_package_path}') | Out-Null; Get-ChildItem -LiteralPath '${native_stage_path}' | Compress-Archive -Force -DestinationPath '${native_package_path}'" >/dev/null
         else
             echo "No ZIP tool available for ${binary_path}" >&2
             rm -rf "${stage_dir}"
